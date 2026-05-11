@@ -27,6 +27,10 @@ KD = 1.5
 CENTER = 2000  # Sensor center value
 SPEED = 10 
 
+SHOE_INDICES   = {770, 774, 630 }   
+BOTTLE_INDICES = {440, 737, 898}         
+MUG_INDICES    = {504, 968}              
+
 class AlphaBot2(object):
     def __init__(self):
         self.AIN1 = 12
@@ -170,9 +174,20 @@ class AlphaBot2(object):
         self.clear_leds()
 
     def infrared_obstacle_check(self):
-        self.DR_status = GPIO.input(self.DR)
-        self.DL_status = GPIO.input(self.DL)
-        return self.DL_status == 0 or self.DR_status == 0
+        dr = GPIO.input(self.DR) == 0
+        dl = GPIO.input(self.DL) == 0
+        current_state = dr or dl
+
+        if current_state and not self.prev_obstacle_state:
+            self.obstacle_count += 1
+            buzz_amount = ((self.obstacle_count - 1) % 3) + 1
+            for _ in range(buzz_amount):
+                GPIO.output(self.Buzzer, GPIO.HIGH)
+                time.sleep(0.1)
+                GPIO.output(self.Buzzer, GPIO.LOW)
+                time.sleep(0.1)
+
+        self.prev_obstacle_state = current_state
 
     def buzzer_on(self):
         GPIO.output(self.Buzzer, GPIO.HIGH)
@@ -212,13 +227,18 @@ class AlphaBot2(object):
                 probs = output[0].softmax(dim=0)
                 top_prob, top_idx = torch.max(probs, dim=0)
                 print(f"Object Recognition: {top_prob.item() * 100:.2f}% {self.imagenet_classes[top_idx.item()]}")
-                # if top_idx.item() == 761:       # remote control
-                    # self.set_led(0, 255, 0, 0)  # LED 1 red
-                # elif top_idx.item() == 784:     # screwdriver
-                    # self.set_led(1, 255, 255, 0)  # LED 2 yellow
-                # elif top_idx.item() == 504:     # coffee mug
-                    # self.set_led(2, 0, 255, 0)  # LED 3 green
-                self.set_led(2, 0, 255, 0)
+                if top_idx.item() in SHOE_INDICES  :       
+                    self.set_led(0, 255, 0, 0)  
+                    self.set_led(1, 255, 0, 0)  
+                    self.set_led(2, 255, 0, 0)  
+                elif top_idx.item() in BOTTLE_INDICES:     
+                    self.set_led(0, 255, 255, 0)  
+                    self.set_led(1, 255, 255, 0)  
+                    self.set_led(2, 255, 255, 0)  
+                elif top_idx.item() in  MUG_INDICES:     
+                    self.set_led(0, 0, 255, 0)  
+                    self.set_led(1, 0, 255, 0)  
+                    self.set_led(2, 0, 255, 0)  
                 self.update_leds()
         except Exception as e:
             print(f"Error during object recognition: {e}")
@@ -290,12 +310,12 @@ if __name__ == '__main__':
             ####### FOLLOW LINE
             bot.follow_line()         
             ####### DETECT OBSTACLE
-            # if bot.infrared_obstacle_check():
-                # print("Obstacle detected!")
+            if bot.infrared_obstacle_check():
+                print("Obstacle detected!")
             
             bot.clear_leds()
             ####### RECOGNIZE OBJECT
-            # bot.recognize_object()
+            bot.recognize_object()
                         
     except KeyboardInterrupt:
         print("KeyboardInterrupt detected. Stopping execution.")

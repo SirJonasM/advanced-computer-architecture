@@ -85,9 +85,6 @@ class AlphaBot2(object):
         self.object_model = None
         self.imagenet_classes = None
         self.load_object_recognition_model()
-        self.running = True
-        self.lock = threading.Lock() 
-        self.integral = 0 
 
     def setMotor(self, left, right):
         """
@@ -95,28 +92,28 @@ class AlphaBot2(object):
         positive = forward
         negative = backward
         """
-        with self.lock:
-            # clamp values
-            left = max(-100, min(100, left))
-            right = max(-100, min(100, right))
 
-            if left >= 0:
-                GPIO.output(self.AIN1, GPIO.LOW)
-                GPIO.output(self.AIN2, GPIO.HIGH)
-                self.PWMA.ChangeDutyCycle(left)
-            else:
-                GPIO.output(self.AIN1, GPIO.HIGH)
-                GPIO.output(self.AIN2, GPIO.LOW)
-                self.PWMA.ChangeDutyCycle(-left)
+        # clamp values
+        left = max(-100, min(100, left))
+        right = max(-100, min(100, right))
 
-            if right >= 0:
-                GPIO.output(self.BIN1, GPIO.LOW)
-                GPIO.output(self.BIN2, GPIO.HIGH)
-                self.PWMB.ChangeDutyCycle(right)
-            else:
-                GPIO.output(self.BIN1, GPIO.HIGH)
-                GPIO.output(self.BIN2, GPIO.LOW)
-                self.PWMB.ChangeDutyCycle(-right)
+        if left >= 0:
+            GPIO.output(self.AIN1, GPIO.LOW)
+            GPIO.output(self.AIN2, GPIO.HIGH)
+            self.PWMA.ChangeDutyCycle(left)
+        else:
+            GPIO.output(self.AIN1, GPIO.HIGH)
+            GPIO.output(self.AIN2, GPIO.LOW)
+            self.PWMA.ChangeDutyCycle(-left)
+
+        if right >= 0:
+            GPIO.output(self.BIN1, GPIO.LOW)
+            GPIO.output(self.BIN2, GPIO.HIGH)
+            self.PWMB.ChangeDutyCycle(right)
+        else:
+            GPIO.output(self.BIN1, GPIO.HIGH)
+            GPIO.output(self.BIN2, GPIO.LOW)
+            self.PWMB.ChangeDutyCycle(-right)
 
     def stop(self):
         self.PWMA.ChangeDutyCycle(0)
@@ -157,8 +154,7 @@ class AlphaBot2(object):
 
     def update_leds(self):
         """Update the LED strip to show the current colors."""
-        with self.lock:
-            self.led_strip.show()
+        self.led_strip.show()
 
     def clear_leds(self):
         """Turn off all LEDs."""
@@ -213,6 +209,35 @@ class AlphaBot2(object):
     def stop_camera(self):
         self.camera_server.stop_server()
 
+
+
+class AlphaBot2Multithreaded(AlphaBot2): 
+    def __init__(self):
+        super().__init__()
+        self.running = True
+        self.lock = threading.Lock() # CRITICAL: Prevents thread collisions on GPIO
+        self.integral = 0 # Initialize integral for PID
+
+    def setMotor(self, left, right):
+        """Thread-safe motor control."""
+        with self.lock:
+            # Re-implementing the core logic here to ensure the lock covers everything
+            left = max(-100, min(100, left))
+            right = max(-100, min(100, right))
+            
+            GPIO.output(self.AIN1, GPIO.LOW if left >= 0 else GPIO.HIGH)
+            GPIO.output(self.AIN2, GPIO.HIGH if left >= 0 else GPIO.LOW)
+            self.PWMA.ChangeDutyCycle(abs(left))
+
+            GPIO.output(self.BIN1, GPIO.LOW if right >= 0 else GPIO.HIGH)
+            GPIO.output(self.BIN2, GPIO.HIGH if right >= 0 else GPIO.LOW)
+            self.PWMB.ChangeDutyCycle(abs(right))
+
+    def update_leds(self):
+        """Thread-safe LED update."""
+        with self.lock:
+            self.led_strip.show()
+
     def follow_line(self):
         """Improved PID iteration."""
         position, sensors = self.tr_sensor.readLine()
@@ -265,9 +290,9 @@ class AlphaBot2(object):
         """Thread dedicated to camera-based object recognition."""
         print("Starting Recognition Thread")
 
-        SHOE_INDICES   = {770, 774, 630 }   # sneaker/running shoe/sandal/loafer
-        BOTTLE_INDICES = {440, 737, 898}         # bottle / water_bottle / wine_bottle
-        MUG_INDICES    = {504, 968}              # coffee_mug / cup
+        SHOE_INDICES   = {770, 774, 630 }   
+        BOTTLE_INDICES = {440, 737, 898}         
+        MUG_INDICES    = {504, 968}             
 
         if self.object_model is None or self.imagenet_classes is None:
             print("Object recognition model not loaded. Cannot recognize object.")
@@ -314,8 +339,15 @@ class AlphaBot2(object):
                 time.sleep(0.5) 
 
 
+    def set_led_sync(self, r, g, b):
+        """Thread-safe LED update."""
+        for i in range(4):
+            self.led_strip.setPixelColor(i, Color(r, g, b))
+        self.led_strip.show()
+
 if __name__ == '__main__':
-    bot = AlphaBot2()
+    bot = AlphaBot2Multithreaded()
+
     bot.set_led(2, 0, 0, 255)    # Blue
     bot.update_leds()
     bot.buzzer_on()
@@ -342,7 +374,7 @@ if __name__ == '__main__':
         t3.start()
         
         while True: 
-            time.sleep(1)
+            time.sleep(10)
 
             
     except KeyboardInterrupt:

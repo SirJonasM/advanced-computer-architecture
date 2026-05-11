@@ -1,5 +1,6 @@
 import RPi.GPIO as GPIO
 from rpi_ws281x import Adafruit_NeoPixel, Color
+import argparse
 import torch
 from torchvision import models, transforms
 from torchvision.models.quantization import MobileNet_V2_QuantizedWeights
@@ -25,9 +26,9 @@ stop_event = False
 KP = 0.3
 KI = 0.001
 KD = 1.5
+SPEED = 15
 
 CENTER = 2000  
-SPEED = 15
 POWER_DIFF_MAX = 90
 
 class AlphaBot2(object):
@@ -345,7 +346,26 @@ class AlphaBot2Multithreaded(AlphaBot2):
             self.led_strip.setPixelColor(i, Color(r, g, b))
         self.led_strip.show()
 
-if __name__ == '__main__':
+def parse_args():
+    # 1. Setup the Argument Parser
+    parser = argparse.ArgumentParser(description='AlphaBot2 Line Follower Configuration')
+    
+    # 2. Add arguments with your current values as defaults
+    parser.add_argument('--kp', type=float, default=0.3, help='Proportional gain (default: 0.3)')
+    parser.add_argument('--ki', type=float, default=0.001, help='Integral gain (default: 0.001)')
+    parser.add_argument('--kd', type=float, default=1.5, help='Derivative gain (default: 1.5)')
+    parser.add_argument('--speed', type=int, default=15, help='Base motor speed (default: 15)')
+
+    # 3. Parse the arguments
+    args = parser.parse_args()
+
+    # Use the parsed values
+    KP = args.kp
+    KI = args.ki
+    KD = args.kd
+    SPEED = args.speed    
+
+def main():
     bot = AlphaBot2Multithreaded()
 
     bot.set_led(2, 0, 0, 255)    # Blue
@@ -388,3 +408,8 @@ if __name__ == '__main__':
         bot.servo.stop()
         bot.clear_leds()
         print("All operations stopped. Exiting program.")
+
+
+if __name__ == '__main__':
+    parse_args()
+    main()

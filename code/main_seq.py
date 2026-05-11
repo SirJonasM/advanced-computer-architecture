@@ -24,9 +24,8 @@ stop_event = False
 KP = 0.3
 KI = 0.001
 KD = 1.5
-
 CENTER = 2000  # Sensor center value
-SPEED = 10
+SPEED = 10 
 
 class AlphaBot2(object):
     def __init__(self):
@@ -38,9 +37,6 @@ class AlphaBot2(object):
         self.ENB = 26
         self.PA = 25
         self.PB = 25
-        self.obstacle_count = 0
-        self.prev_obstacle_state = False
-        self.start_time = None
         self.integral = 0
         self.last_proportional = 0
         self.maximum = 25
@@ -174,32 +170,9 @@ class AlphaBot2(object):
         self.clear_leds()
 
     def infrared_obstacle_check(self):
-        """Check IR sensors and return True if path is blocked."""
-        dr = GPIO.input(self.DR) == 0
-        dl = GPIO.input(self.DL) == 0
-        current_state = dr or dl
-
-        # Edge detection for the buzzer counter
-        if current_state and not self.prev_obstacle_state:
-            self.stop()
-            self.obstacle_count += 1
-            print(f"OBSTACLE {self.obstacle_count} | STOPPING")
-            
-            # Since this is sequential, the robot stops completely 
-            # while the buzzer sounds.
-            buzz_amount = ((self.obstacle_count - 1) % 3) + 1
-            self.buzz_sync(buzz_amount)
-
-        self.prev_obstacle_state = current_state
-        return current_state
-
-    def buzz_sync(self, times):
-        """Sequential buzzer: blocks execution while buzzing."""
-        for _ in range(times):
-            self.buzzer_on()
-            time.sleep(0.1)
-            self.buzzer_off()
-            time.sleep(0.1)
+        self.DR_status = GPIO.input(self.DR)
+        self.DL_status = GPIO.input(self.DL)
+        return self.DL_status == 0 or self.DR_status == 0
 
     def buzzer_on(self):
         GPIO.output(self.Buzzer, GPIO.HIGH)
@@ -250,7 +223,6 @@ class AlphaBot2(object):
         except Exception as e:
             print(f"Error during object recognition: {e}")
 
-
     # Follow Line
     def follow_line(self):
         """Perform one iteration of the PID line following."""
@@ -270,9 +242,8 @@ class AlphaBot2(object):
 
         self.setMotor(SPEED - power_diff, SPEED + power_diff)
 
-
+ #########################################################################
 if __name__ == '__main__':
-    stop_event = False
     bot = AlphaBot2()
     bot.set_led(2, 0, 0, 255)    # Blue
     bot.buzzer_on()
@@ -283,20 +254,49 @@ if __name__ == '__main__':
     time.sleep(2)
     bot.clear_leds()
 
-    bot.stop()
+    ####### CALIBRATION PHASE
+    # print("Calibrating... move robot over line")
+    # Manual
+    # while True:
+        # print(bot.tr_sensor.AnalogRead())
+        # time.sleep(0.1)
+
+    # Automatic
+    # for i in range(200):
+        # if (i // 50) % 2 == 0:
+            # bot.setMotor(10, -10)
+        # else:
+            # bot.setMotor(-10, 10)
+
+        # bot.tr_sensor.calibrate()
+        # time.sleep(0.02)
+
+    # bot.stop()
+    # print("Min:", bot.tr_sensor.calibratedMin)
+    # print("Max:", bot.tr_sensor.calibratedMax)
+
+    # print("Calibration done")
+    # bot.tr_sensor.calibratedMin = [164, 142, 176, 138, 177]
+    # bot.tr_sensor.calibratedMax = [971, 973, 975, 970, 978]
+    
+    bot.tr_sensor.calibratedMin = [210, 193, 218, 184, 247]
+    bot.tr_sensor.calibratedMax = [956, 957, 960, 951, 949]
+
     print("Min:", bot.tr_sensor.calibratedMin)
     print("Max:", bot.tr_sensor.calibratedMax)
 
-    bot.tr_sensor.calibratedMin = [164, 142, 176, 138, 177]
-    bot.tr_sensor.calibratedMax = [971, 973, 975, 970, 978]
-
     try:
         while not stop_event:
-            is_blocked = bot.infrared_obstacle_check()
-            if not is_blocked:
-                bot.follow_line()         
-            bot.recognize_object()
-
+            ####### FOLLOW LINE
+            bot.follow_line()         
+            ####### DETECT OBSTACLE
+            # if bot.infrared_obstacle_check():
+                # print("Obstacle detected!")
+            
+            bot.clear_leds()
+            ####### RECOGNIZE OBJECT
+            # bot.recognize_object()
+                        
     except KeyboardInterrupt:
         print("KeyboardInterrupt detected. Stopping execution.")
         stop_event = True

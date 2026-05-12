@@ -10,6 +10,7 @@ import threading  # Required for multithreading
 from CameraServerClass import CameraServer
 from TRSensors import TRSensors
 from ServoControllerClass import ServoController
+from AlphaBot2 import AlphaBot2
 
 # LED strip configuration constants:
 LED_COUNT      = 4      # Number of LED pixels.
@@ -26,191 +27,6 @@ stop_event = False
 
 CENTER = 2000  
 POWER_DIFF_MAX = 90
-
-class AlphaBot2(object):
-    def __init__(self, kp, ki, kd, speed):
-        self.kp = kp
-        self.ki = ki
-        self.kd = kd
-        self.speed = speed        
-
-        self.AIN1 = 12
-        self.AIN2 = 13
-        self.BIN1 = 20
-        self.BIN2 = 21
-        self.ENA = 6
-        self.ENB = 26
-        self.PA = 25
-        self.PB = 25
-        self.obstacle_count = 0
-        self.prev_obstacle_state = False
-        self.start_time = None
-        self.integral = 0
-        self.last_proportional = 0
-        self.maximum = 25
-        self.DR = 16
-        self.DL = 19
-        self.CS = 5
-        self.Clock = 25
-        self.Address = 24
-        self.DataOut = 23
-        self.Buzzer = 4
-        GPIO.setmode(GPIO.BCM)
-        GPIO.setwarnings(False)
-        motor_pins = [self.AIN1, self.AIN2, self.BIN1, self.BIN2, self.ENA, self.ENB]
-        for pin in motor_pins:
-            GPIO.setup(pin, GPIO.OUT)
-        GPIO.setup(self.Clock, GPIO.OUT)
-        GPIO.setup(self.CS, GPIO.OUT)
-        GPIO.setup(self.Address, GPIO.OUT)
-        GPIO.setup(self.DataOut, GPIO.IN, GPIO.PUD_UP)
-        GPIO.setup(self.Buzzer, GPIO.OUT)
-        GPIO.setup(self.DR, GPIO.IN, pull_up_down=GPIO.PUD_UP)
-        GPIO.setup(self.DL, GPIO.IN, pull_up_down=GPIO.PUD_UP)
-        self.PWMA = GPIO.PWM(self.ENA, 500)
-        self.PWMB = GPIO.PWM(self.ENB, 500)
-        self.PWMA.start(0)
-        self.PWMB.start(0)
-        self.stop()
-        # Initialize distance sensors
-        self.DR_status = 1
-        self.DL_status = 1
-        # Initialize additional components
-        self.tr_sensor = TRSensors()
-        self.servo = ServoController()
-        self.camera_server = CameraServer()
-        # LED Strip Initialization
-        self.led_strip = Adafruit_NeoPixel(LED_COUNT, LED_PIN, LED_FREQ_HZ,
-                                            LED_DMA, LED_INVERT, LED_BRIGHTNESS, LED_CHANNEL)
-        self.led_strip.begin()
-        # Initialize object recognition model and labels
-        self.object_model = None
-        self.imagenet_classes = None
-        self.load_object_recognition_model()
-
-    def setMotor(self, left, right):
-        """
-        left/right: -100 to +100
-        positive = forward
-        negative = backward
-        """
-
-        # clamp values
-        left = max(-100, min(100, left))
-        right = max(-100, min(100, right))
-
-        if left >= 0:
-            GPIO.output(self.AIN1, GPIO.LOW)
-            GPIO.output(self.AIN2, GPIO.HIGH)
-            self.PWMA.ChangeDutyCycle(left)
-        else:
-            GPIO.output(self.AIN1, GPIO.HIGH)
-            GPIO.output(self.AIN2, GPIO.LOW)
-            self.PWMA.ChangeDutyCycle(-left)
-
-        if right >= 0:
-            GPIO.output(self.BIN1, GPIO.LOW)
-            GPIO.output(self.BIN2, GPIO.HIGH)
-            self.PWMB.ChangeDutyCycle(right)
-        else:
-            GPIO.output(self.BIN1, GPIO.HIGH)
-            GPIO.output(self.BIN2, GPIO.LOW)
-            self.PWMB.ChangeDutyCycle(-right)
-
-    def stop(self):
-        self.PWMA.ChangeDutyCycle(0)
-        self.PWMB.ChangeDutyCycle(0)
-
-        GPIO.output(self.AIN1, GPIO.LOW)
-        GPIO.output(self.AIN2, GPIO.LOW)
-        GPIO.output(self.BIN1, GPIO.LOW)
-        GPIO.output(self.BIN2, GPIO.LOW)
-
-    # compatibility aliases for old code
-    def setPWMA(self, duty):
-        self.PWMA.ChangeDutyCycle(max(0, min(100, duty)))
-
-    def setPWMB(self, duty):
-        self.PWMB.ChangeDutyCycle(max(0, min(100, duty)))
-
-    def load_object_recognition_model(self):
-        try:
-            self.object_model = models.quantization.mobilenet_v2(
-                weights=MobileNet_V2_QuantizedWeights.IMAGENET1K_QNNPACK_V1,
-                quantize=True
-            )
-            self.object_model.eval()
-            with open("imagenet1000_clsidx_to_labels.txt", "r") as f:
-                labels_dict = ast.literal_eval(f.read())
-                self.imagenet_classes = [labels_dict[i] for i in range(len(labels_dict))]
-            print("Object recognition model loaded successfully.")
-        except Exception as e:
-            print("Error loading object recognition model:", e)
-            self.object_model = None
-            self.imagenet_classes = None
-
-    def set_led(self, index, r, g, b):
-        """Set a single LED's color."""
-        if 0 <= index < LED_COUNT:
-            self.led_strip.setPixelColor(index, Color(r, g, b))
-
-    def update_leds(self):
-        """Update the LED strip to show the current colors."""
-        self.led_strip.show()
-
-    def clear_leds(self):
-        """Turn off all LEDs."""
-        for i in range(LED_COUNT):
-            self.led_strip.setPixelColor(i, Color(0, 0, 0))
-        self.led_strip.show()
-
-    def set_leds_default(self):
-        """Set a default pattern on the LED strip."""
-        self.set_led(0, 255, 0, 0)    # Red
-        self.set_led(1, 0, 255, 0)    # Green
-        self.set_led(2, 0, 0, 255)    # Blue
-        self.set_led(3, 255, 255, 0)  # Yellow
-        self.update_leds()
-        time.sleep(2)
-        self.clear_leds()
-
-    def infrared_obstacle_check(self):
-        """Check IR sensors and return True if path is blocked."""
-        dr = GPIO.input(self.DR) == 0
-        dl = GPIO.input(self.DL) == 0
-        current_state = dr or dl
-
-        if current_state and not self.prev_obstacle_state:
-            self.stop()
-            self.obstacle_count += 1
-            print(f"OBSTACLE {self.obstacle_count} | STOPPING")
-            
-            buzz_amount = ((self.obstacle_count - 1) % 3) + 1
-            self.buzz_sync(buzz_amount)
-
-        self.prev_obstacle_state = current_state
-        return current_state
-
-    def buzz_sync(self, times):
-        """Sequential buzzer: blocks execution while buzzing."""
-        for _ in range(times):
-            self.buzzer_on()
-            time.sleep(0.1)
-            self.buzzer_off()
-            time.sleep(0.1)
-
-    def buzzer_on(self):
-        GPIO.output(self.Buzzer, GPIO.HIGH)
-
-    def buzzer_off(self):
-        GPIO.output(self.Buzzer, GPIO.LOW)
-
-    def start_camera(self):
-        self.camera_server.start_server()
-
-    def stop_camera(self):
-        self.camera_server.stop_server()
-
 
 
 class AlphaBot2Multithreaded(AlphaBot2): 
@@ -253,7 +69,7 @@ class AlphaBot2Multithreaded(AlphaBot2):
         derivative = proportional - self.last_proportional
         self.last_proportional = proportional
 
-        power_diff = (self.kd * proportional) + (self.ki * self.integral) + (self.kd * derivative)
+        power_diff = (self.kp * proportional) + (self.ki * self.integral) + (self.kd * derivative)
         
         power_diff = max(-POWER_DIFF_MAX, min(POWER_DIFF_MAX, power_diff))
 
@@ -264,7 +80,6 @@ class AlphaBot2Multithreaded(AlphaBot2):
         time.sleep(3) 
         while self.running:
             self.follow_line()
-            # CRITICAL: Allow context switching
             time.sleep(0.002)
 
 
@@ -321,7 +136,7 @@ class AlphaBot2Multithreaded(AlphaBot2):
                     output = self.object_model(input_batch)
                     probs = output[0].softmax(dim=0)
                     top_prob, top_idx = torch.max(probs, dim=0)
-                    if top_prob.item() > 0.6:
+                    if top_prob.item() > 0.1:
                         print(f"Object Recognition: {top_prob.item() * 100:.2f}% {self.imagenet_classes[top_idx.item()]}")
                         if top_idx.item() in SHOE_INDICES  :       
                             self.set_led(0, 255, 0, 0)  
@@ -349,7 +164,6 @@ class AlphaBot2Multithreaded(AlphaBot2):
 
 
 def main():
-
     bot.set_led(2, 0, 0, 255)    # Blue
     bot.update_leds()
     bot.buzzer_on()
@@ -391,19 +205,15 @@ def main():
         bot.clear_leds()
         print("All operations stopped. Exiting program.")
 
-
-if __name__ == '__main__':
-    # 1. Setup the Argument Parser
+def parse_args():
     parser = argparse.ArgumentParser(description='AlphaBot2 Line Follower Configuration')
-    
-    # 2. Add arguments with your current values as defaults
     parser.add_argument('--kp', type=float, default=0.3, help='Proportional gain (default: 0.3)')
     parser.add_argument('--ki', type=float, default=0.001, help='Integral gain (default: 0.001)')
     parser.add_argument('--kd', type=float, default=1.5, help='Derivative gain (default: 1.5)')
     parser.add_argument('--speed', type=int, default=15, help='Base motor speed (default: 15)')
+    return parser.parse_args()
 
-    # 3. Parse the arguments
-    args = parser.parse_args()
-
+if __name__ == '__main__':
+    args = parse_args()
     bot = AlphaBot2Multithreaded(kp=args.kp, ki=args.ki, kd=args.kd, speed= args.speed)
     main()

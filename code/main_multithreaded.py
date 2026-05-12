@@ -4,22 +4,17 @@ import argparse
 import torch
 from torchvision import models, transforms
 from torchvision.models.quantization import MobileNet_V2_QuantizedWeights
-import ast
 import time
-import threading  # Required for multithreading
+import threading  
 from CameraServerClass import CameraServer
 from TRSensors import TRSensors
 from ServoControllerClass import ServoController
 from AlphaBot2 import AlphaBot2
 from default_values import * 
 
-
 # Global flag to shutdown
 stop_event = False
-
-
 POWER_DIFF_MAX = 90
-
 
 class AlphaBot2Multithreaded(AlphaBot2): 
     def __init__(self, kp, ki, kd, speed):

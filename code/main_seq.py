@@ -1,5 +1,6 @@
 import RPi.GPIO as GPIO
 from rpi_ws281x import Adafruit_NeoPixel, Color
+import argparse
 import torch
 from torchvision import models, transforms
 from torchvision.models.quantization import MobileNet_V2_QuantizedWeights
@@ -19,20 +20,18 @@ LED_INVERT     = False  # True to invert the signal (when using NPN transistor l
 LED_CHANNEL    = 0
 
 # Global flag to shutdown
-stop_event = False
-# Proportional controller constant
-KP = 0.3
-KI = 0.001
-KD = 1.5
 CENTER = 2000  # Sensor center value
-SPEED = 10 
 
 SHOE_INDICES   = {770, 774, 630 }   
 BOTTLE_INDICES = {440, 737, 898}         
 MUG_INDICES    = {504, 968}              
 
 class AlphaBot2(object):
-    def __init__(self):
+    def __init__(self, kp, ki, kd, speed):
+        self.kp = kp
+        self.ki = ki
+        self.kd = kd
+        self.speed = speed        
         self.AIN1 = 12
         self.AIN2 = 13
         self.BIN1 = 20
@@ -256,15 +255,15 @@ class AlphaBot2(object):
         else:
             self.integral = 0
             
-        power_diff = (KP * proportional) + (KI * self.integral) + (KD * derivative)
+        power_diff = (self.kp * proportional) + (self.ki * self.integral) + (self.kd * derivative)
         self.last_proportional = proportional
         power_diff = max(-50, min(50, power_diff))
 
-        self.setMotor(SPEED - power_diff, SPEED + power_diff)
+        self.setMotor(self.speed - power_diff, self.speed + power_diff)
 
- #########################################################################
-if __name__ == '__main__':
-    bot = AlphaBot2()
+
+def main(bot):
+    stop_event = False
     bot.set_led(2, 0, 0, 255)    # Blue
     bot.buzzer_on()
     time.sleep(0.1)
@@ -273,31 +272,6 @@ if __name__ == '__main__':
     print("Camera server started. Visit http://<your_pi_ip>:5000/ in your browser.")
     time.sleep(2)
     bot.clear_leds()
-
-    ####### CALIBRATION PHASE
-    # print("Calibrating... move robot over line")
-    # Manual
-    # while True:
-        # print(bot.tr_sensor.AnalogRead())
-        # time.sleep(0.1)
-
-    # Automatic
-    # for i in range(200):
-        # if (i // 50) % 2 == 0:
-            # bot.setMotor(10, -10)
-        # else:
-            # bot.setMotor(-10, 10)
-
-        # bot.tr_sensor.calibrate()
-        # time.sleep(0.02)
-
-    # bot.stop()
-    # print("Min:", bot.tr_sensor.calibratedMin)
-    # print("Max:", bot.tr_sensor.calibratedMax)
-
-    # print("Calibration done")
-    # bot.tr_sensor.calibratedMin = [164, 142, 176, 138, 177]
-    # bot.tr_sensor.calibratedMax = [971, 973, 975, 970, 978]
     
     bot.tr_sensor.calibratedMin = [210, 193, 218, 184, 247]
     bot.tr_sensor.calibratedMax = [956, 957, 960, 951, 949]
@@ -307,14 +281,11 @@ if __name__ == '__main__':
 
     try:
         while not stop_event:
-            ####### FOLLOW LINE
             bot.follow_line()         
-            ####### DETECT OBSTACLE
             if bot.infrared_obstacle_check():
                 print("Obstacle detected!")
             
             bot.clear_leds()
-            ####### RECOGNIZE OBJECT
             bot.recognize_object()
                         
     except KeyboardInterrupt:
@@ -326,3 +297,16 @@ if __name__ == '__main__':
         bot.servo.stop()
         GPIO.cleanup()
         print("All operations stopped. Exiting program.")
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description='AlphaBot2 Line Follower Configuration')
+    
+    parser.add_argument('--kp', type=float, default=0.3, help='Proportional gain (default: 0.3)')
+    parser.add_argument('--ki', type=float, default=0.001, help='Integral gain (default: 0.001)')
+    parser.add_argument('--kd', type=float, default=1.5, help='Derivative gain (default: 1.5)')
+    parser.add_argument('--speed', type=int, default=15, help='Base motor speed (default: 15)')
+
+    args = parser.parse_args()
+    bot = AlphaBot2(kp=args.kp, ki=args.ki, kd=args.kd, speed=args.speed)
+
+    main(bot)

@@ -12,7 +12,7 @@
 
         if [ "$WIFI" != "robot2" ]; then
           echo "📡 Switching from $PREVIOUS_WIFI to robot2..."
-          ${pkgs.networkmanager}/bin/nmcli device wifi connect robot2
+          ${pkgs.networkmanager}/bin/nmcli device wifi connect robot13
         else
           echo "📶 Already connected to robot2."
         fi

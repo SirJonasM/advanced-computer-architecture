@@ -23,16 +23,17 @@ LED_CHANNEL    = 0
 # Global flag to shutdown
 stop_event = False
 
-KP = 0.3
-KI = 0.001
-KD = 1.5
-SPEED = 15
 
 CENTER = 2000  
 POWER_DIFF_MAX = 90
 
 class AlphaBot2(object):
-    def __init__(self):
+    def __init__(self, kp, ki, kd, speed):
+        self.kp = kp
+        self.ki = ki
+        self.kd = kd
+        self.speed = speed        
+
         self.AIN1 = 12
         self.AIN2 = 13
         self.BIN1 = 20
@@ -213,10 +214,10 @@ class AlphaBot2(object):
 
 
 class AlphaBot2Multithreaded(AlphaBot2): 
-    def __init__(self):
-        super().__init__()
+    def __init__(self, kp, ki, kd, speed):
+        super().__init__(kp=kp, ki=ki, kd=kd, speed=speed)
         self.running = True
-        self.lock = threading.Lock() # CRITICAL: Prevents thread collisions on GPIO
+        self.lock = threading.Lock() 
         self.integral = 0 # Initialize integral for PID
 
     def setMotor(self, left, right):
@@ -252,11 +253,11 @@ class AlphaBot2Multithreaded(AlphaBot2):
         derivative = proportional - self.last_proportional
         self.last_proportional = proportional
 
-        power_diff = (KP * proportional) + (KI * self.integral) + (KD * derivative)
+        power_diff = (self.kd * proportional) + (self.ki * self.integral) + (self.kd * derivative)
         
         power_diff = max(-POWER_DIFF_MAX, min(POWER_DIFF_MAX, power_diff))
 
-        self.setMotor(SPEED - power_diff, SPEED + power_diff)
+        self.setMotor(self.speed - power_diff, self.speed + power_diff)
 
     def line_following_thread(self):
         print("Starting Line Following Thread")
@@ -346,27 +347,8 @@ class AlphaBot2Multithreaded(AlphaBot2):
             self.led_strip.setPixelColor(i, Color(r, g, b))
         self.led_strip.show()
 
-def parse_args():
-    # 1. Setup the Argument Parser
-    parser = argparse.ArgumentParser(description='AlphaBot2 Line Follower Configuration')
-    
-    # 2. Add arguments with your current values as defaults
-    parser.add_argument('--kp', type=float, default=0.3, help='Proportional gain (default: 0.3)')
-    parser.add_argument('--ki', type=float, default=0.001, help='Integral gain (default: 0.001)')
-    parser.add_argument('--kd', type=float, default=1.5, help='Derivative gain (default: 1.5)')
-    parser.add_argument('--speed', type=int, default=15, help='Base motor speed (default: 15)')
-
-    # 3. Parse the arguments
-    args = parser.parse_args()
-
-    # Use the parsed values
-    KP = args.kp
-    KI = args.ki
-    KD = args.kd
-    SPEED = args.speed    
 
 def main():
-    bot = AlphaBot2Multithreaded()
 
     bot.set_led(2, 0, 0, 255)    # Blue
     bot.update_leds()
@@ -411,5 +393,17 @@ def main():
 
 
 if __name__ == '__main__':
-    parse_args()
+    # 1. Setup the Argument Parser
+    parser = argparse.ArgumentParser(description='AlphaBot2 Line Follower Configuration')
+    
+    # 2. Add arguments with your current values as defaults
+    parser.add_argument('--kp', type=float, default=0.3, help='Proportional gain (default: 0.3)')
+    parser.add_argument('--ki', type=float, default=0.001, help='Integral gain (default: 0.001)')
+    parser.add_argument('--kd', type=float, default=1.5, help='Derivative gain (default: 1.5)')
+    parser.add_argument('--speed', type=int, default=15, help='Base motor speed (default: 15)')
+
+    # 3. Parse the arguments
+    args = parser.parse_args()
+
+    bot = AlphaBot2Multithreaded(kp=args.kp, ki=args.ki, kd=args.kd, speed= args.speed)
     main()

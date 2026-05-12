@@ -3,11 +3,6 @@
 #let course = "Advanced Computer Architecture"
 #let group = "Übung 1 Group 05"
 #let date = datetime.today()
-#let authors = (
-  "Josef Aktan",
-  "Jonas Moewes",
-  "Markus Steinle",
-)
 
 #set page(numbering: "(i)", header: [
   #set text(8pt)
@@ -21,11 +16,17 @@
   )
 ])
 
-#align(right, text(10pt)[
-  #authors.join(linebreak())
-])
+#align(right, text(10pt, grid(
+  columns: 3,
+  align: (left,center, right),
+  column-gutter: 4pt,
+  row-gutter: 4pt,
+  [Jonas Möwes], [-], [4765361],
+  [Josef Aktan], [-], [4765361],
+  [Markus Steinle],[-], [4768157],
+)))
 
-#align(center, title("Homework 1: Multithreaded AlphaBot2" ))
+#align(center, title("Homework 1: Multithreaded AlphaBot2"))
 
 = Introduction
 This experiment details the implementation of a multithreaded control system for the AlphaBot2 robot.

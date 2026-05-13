@@ -18,12 +18,12 @@
 
 #align(right, text(10pt, grid(
   columns: 3,
-  align: (left,center, right),
+  align: (left, center, right),
   column-gutter: 4pt,
   row-gutter: 4pt,
   [Jonas Möwes], [-], [4765361],
-  [Josef Aktan], [-], [4765361],
-  [Markus Steinle],[-], [4768157],
+  [Josef Aktan], [-], [4760674],
+  [Markus Steinle], [-], [4768157],
 )))
 
 #align(center, title("Homework 1: Multithreaded AlphaBot2"))
@@ -69,6 +69,18 @@ This architecture distributes the workload across three dedicated threads:
   By running this in a separate thread, the heavy inference overhead does not "starve" the motor controllers.
 
 Note: Each thread incorporates a brief sleep interval (yield) to prevent CPU saturation.
+
+== PID Parameter Tuning
+To ensure the robot remains centered on the track, the PID controller was calibrated at a constant speed of 10, where the proportional term ($K_p$) handles the deviation from center, the derivative ($K_d$) accounts for the rate of error change between iterations, and a small integral ($K_i$) term accumulates steady-state error while the line is detected.
+The following values were optimized for a constant speed of 10:
+#figure(caption: [PID parameter tuning], table(
+  stroke: 0.2pt,
+  columns: 4,
+  [Implementation], [$K_p$], [$K_i$], [$K_d$],
+  [Sequential], [0.015], [0.001], [0.008],
+  [multithreaded], [0.015], [0.0], [0.015],
+))
+
 
 = Improvements
 The performance gap between the two architectures is most apparent during multi-tasking.

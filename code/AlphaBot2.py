@@ -17,6 +17,8 @@ class AlphaBot2(object):
         self.kd = kd
         self.speed = speed        
 
+        self.obstacle_count = 0
+
         self.AIN1 = 12
         self.AIN2 = 13
         self.BIN1 = 20
